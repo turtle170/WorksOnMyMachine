@@ -1,36 +1,41 @@
-//! What a womm-built executable does when run: it executes the project plan.
+//! What a womm-built executable does when run: executes its signature on the
+//! Kludge VM.
 
-use std::io::Write;
-use std::thread::sleep;
-use std::time::Duration;
+use std::io::{IsTerminal, Write};
 
 use crate::payload::Program;
+use crate::vm;
 
 pub fn run(p: Program) -> i32 {
-    if std::env::args().any(|a| a == "--womm-source") {
-        print!("{}", p.plan);
+    let code = match vm::decode_signature(&p.signature) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}: corrupt program payload: {e}", p.name);
+            return 70;
+        }
+    };
+
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--womm-signature") {
+        println!("{}", p.signature);
+        return 0;
+    }
+    if args.iter().any(|a| a == "--womm-disasm") {
+        print!("{}", vm::disasm(&code));
         return 0;
     }
 
-    println!("{} -- built with {} from {} kludge object(s)", p.name, p.built_with, p.kludge_count);
-    println!("integrity sha256:{}\n", p.source_sha256);
-
-    let steps: Vec<&str> = p.plan.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-    if steps.is_empty() {
-        println!("Project plan is empty. Nothing was done, efficiently.");
-        return 0;
-    }
-
-    // Delays come from the source hash, so every run of a build looks the same.
-    let hash = p.source_sha256.as_bytes();
-    let width = steps.len().to_string().len();
-    for (i, step) in steps.iter().enumerate() {
-        print!("[{:>width$}/{}] {step} ... ", i + 1, steps.len());
-        let _ = std::io::stdout().flush();
-        let jitter = hash.get(i % hash.len().max(1)).copied().unwrap_or(0) as u64 % 16;
-        sleep(Duration::from_millis(40 + jitter * 12));
-        println!("done");
-    }
-    println!("\nProject complete. Works on my machine.");
+    let stdout = std::io::stdout();
+    let tty = stdout.is_terminal();
+    let color = tty && std::env::var_os("NO_COLOR").is_none();
+    let mut out = stdout.lock();
+    let _ = writeln!(
+        out,
+        "{} -- built with {} from {} kludge object(s) at -O{}",
+        p.name, p.built_with, p.kludge_count, p.opt_level
+    );
+    let _ = writeln!(out, "machine key {}, signature {}...\n", p.key_fingerprint, &p.signature[..16]);
+    vm::run(&code, &mut out, tty, color);
+    let _ = writeln!(out, "\nProgram complete. Works on my machine.");
     0
 }

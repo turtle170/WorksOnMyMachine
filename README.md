@@ -7,7 +7,7 @@ womm compiles project plans into native executables. Write your plan in any form
 | Capability | womm |
 |---|---|
 | Accepts any Unicode project plan | Yes |
-| SHA-256 integrity at every stage | Yes |
+| SHA-512 + RSA-2048 signed builds | Yes |
 | Tunable parser optimisation (`-O0` to `-O3`) | Yes[^2] |
 | Human-readable build output | Yes, it's Markdown |
 | Native executables for Windows and macOS | Yes[^3] |
@@ -54,7 +54,9 @@ The parser hashes your plan and emits `.kludge` intermediate objects into `syner
 womm build synergy.kludged
 ```
 
-The compiler verifies every kludge object, reassembles the plan, and emits `synergy.womm.md`: a build manifest containing the exact build parameters and the compiled binary.
+The compiler verifies every kludge object, hashes them with **SHA-512**, and signs the digest with your machine's **RSA-2048** key. The result is a 256-byte signature, written as exactly 512 hexadecimal digits into `synergy.womm.md` along with the build parameters and the public key.
+
+Your machine key is generated on first build and kept in your config directory. The same plan built on a different machine produces a different signature.[^5]
 
 ### 4. Link
 
@@ -62,18 +64,52 @@ The compiler verifies every kludge object, reassembles the plan, and emits `syne
 womm parsy-builder synergy.womm.md
 ```
 
-Produces `synergy` (`synergy.exe` on Windows). Run it to execute your project plan:
+The linker parses the 512 signature digits with great care:
 
 ```
-[1/4] # Synergy Platform ... done
-[2/4] - Align stakeholders ... done
-[3/4] - Rewrite it in Rust ... done
-[4/4] - Ship it (on my machine) ... done
-
-Project complete. Works on my machine.
+   Lexed 512 hexadecimal digits across 8 line(s)
+   Verified RSA-2048 signature over SHA-512 digest (key 44c4f1817ecc8069)
+   Paired 512 nibbles into 256 instructions
+   Instruction mix: ADDx17 COLORx15 ENDx14 EXCUSEx20 GLYPHRx17 ...
+   Control flow: loop depth 1, 0 unterminated loop(s), 6 stray END(s), HALT at 0x00c0
 ```
 
-Pass `--womm-source` to a built executable to recover the original plan.
+Each byte of the signature is one instruction for the **Kludge Virtual Machine**: the high nibble is the opcode, the low nibble its argument. Every signature is a valid program and every program terminates. The linker produces `synergy` (`synergy.exe` on Windows).
+
+### 5. Run
+
+```
+$ ./synergy
+ bandwidth ░░░░░░
+ roadmap   ▪ agile □□□□       stakeholder □□□□□□
+░▼░▼░▼▌ paradigm ▐▼▼▼▼▼▼▼▼◆
+  // known issue, wontfix
+```
+
+The output is fully determined by your plan, your parser optimisation level, and your machine. It is not otherwise determined by anything.
+
+Built executables also accept `--womm-disasm` (instruction listing) and `--womm-signature` (the 512 digits).
+
+#### Kludge VM instruction set
+
+| Op | Mnemonic | Effect |
+|---|---|---|
+| `0` | GLYPH | Print glyph *a* from the current set |
+| `1` | REPEAT | Repeat the last glyph *a*+1 times |
+| `2` | COLOR | Set terminal colour *a* |
+| `3` | NEWLINE | New line (reset colour if *a* ≥ 8) |
+| `4` | GLYPHSET | Switch glyph set |
+| `5` | LOOP | Begin a loop of 2 to 4 iterations |
+| `6` | END | End loop |
+| `7` | WORD | Print a business term |
+| `8` | SLEEP | Pause for dramatic effect |
+| `9` | ADD | Increment the register |
+| `A` | GLYPHR | Print a glyph chosen by the register |
+| `B` | SPACE | Print spaces |
+| `C` | STRIPE | Print a glyph eight times |
+| `D` | EXCUSE | Print an excuse |
+| `E` | SKIP | Skip up to two instructions |
+| `F` | MIRROR | Print a mirrored glyph (`FF` halts) |
 
 ### Getting help
 
@@ -85,7 +121,7 @@ Help is available.[^4]
 
 ## Limitations
 
-- Executables are built for the machine that ran `womm build`. Manifests from another platform are rejected by `parsy-builder`.
+- Executables are built for the platform that ran `parsy-builder`.
 - The compiler embeds itself in every executable. This is a design decision.
 - See the [fine print](#fine-print).
 
@@ -95,6 +131,7 @@ Help is available.[^4]
 [^2]: Optimisation levels apply to the parser, not the compiler. They make more files. That is all they do.
 [^3]: One at a time, on the platform you build on.
 [^4]: Eventually.
+[^5]: It works on my machine.
 
 ## License
 
@@ -102,4 +139,4 @@ MIT. See [LICENSE](LICENSE).
 
 ## Fine print
 
-<sub>womm is pathetic, self-aware slopware. It turns a text file into a large number of text files, then into a Markdown file containing a base64 copy of itself, and then into an executable that reads your to-do list back to you, slowly. It worked on my machine. If it doesn't work on yours, there are a few unlisted commands that clean up after it. You may find them by expressing how you feel.</sub>
+<sub>womm is pathetic, self-aware slopware. It turns a text file into a large number of text files, then signs them with enterprise-grade cryptography, then treats the signature as source code. Your plan is discarded along the way. What you get is a terminal screensaver that apologises. It worked on my machine. If it doesn't work on yours, there are a few unlisted commands that clean up after it. You may find them by expressing how you feel.</sub>

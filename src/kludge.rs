@@ -123,7 +123,8 @@ fn prepare_dir(dir: &Path) -> Result<()> {
 }
 
 /// Read every .kludge in `dir`, validate, and reassemble the original source.
-pub fn load(dir: &Path) -> Result<(Header, Vec<u8>)> {
+/// Also returns the raw bytes of each kludge object, in index order.
+pub fn load(dir: &Path) -> Result<(Header, Vec<u8>, Vec<Vec<u8>>)> {
     let mut kludges = Vec::new();
     for entry in fs::read_dir(dir).with_context(|| format!("could not read {}", dir.display()))? {
         let path = entry?.path();
@@ -131,15 +132,15 @@ pub fn load(dir: &Path) -> Result<(Header, Vec<u8>)> {
             let text = fs::read_to_string(&path)?;
             let k: Kludge = toml::from_str(&text)
                 .with_context(|| format!("corrupt kludge object {}", path.display()))?;
-            kludges.push(k);
+            kludges.push((k, text.into_bytes()));
         }
     }
     if kludges.is_empty() {
         bail!("no .kludge objects found in {} (did you run `womm parse`?)", dir.display());
     }
 
-    kludges.sort_by_key(|k| k.kludge.index);
-    let first = kludges[0].kludge.clone();
+    kludges.sort_by_key(|(k, _)| k.kludge.index);
+    let first = kludges[0].0.kludge.clone();
     if first.format != FORMAT {
         bail!("unsupported kludge format {}", first.format);
     }
@@ -152,7 +153,7 @@ pub fn load(dir: &Path) -> Result<(Header, Vec<u8>)> {
     }
 
     let mut source = Vec::new();
-    for (i, k) in kludges.iter().enumerate() {
+    for (i, (k, _)) in kludges.iter().enumerate() {
         let h = &k.kludge;
         if h.index != i as u32 || h.total != first.total || h.source_sha256 != first.source_sha256 {
             bail!("kludge object {} does not belong to this build", h.index);
@@ -166,5 +167,6 @@ pub fn load(dir: &Path) -> Result<(Header, Vec<u8>)> {
     if sha256_hex(&source) != first.source_sha256 {
         bail!("reassembled source does not match its recorded sha256");
     }
-    Ok((first, source))
+    let raw = kludges.into_iter().map(|(_, r)| r).collect();
+    Ok((first, source, raw))
 }

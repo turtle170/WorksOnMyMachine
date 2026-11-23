@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::manifest::MAGIC_LINE;
+use crate::manifest::MAGIC_PREFIX;
 
 #[derive(Default)]
 struct Report {
@@ -65,5 +65,5 @@ fn is_manifest(path: &Path) -> bool {
         .ok()
         .and_then(|f| BufReader::new(f).lines().next())
         .and_then(|l| l.ok())
-        .is_some_and(|l| l == MAGIC_LINE)
+        .is_some_and(|l| l.starts_with(MAGIC_PREFIX))
 }

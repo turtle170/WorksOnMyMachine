@@ -13,11 +13,12 @@ const FOOTER: usize = 16;
 #[derive(Serialize, Deserialize)]
 pub struct Program {
     pub name: String,
-    pub source_sha256: String,
+    /// 512 hex digits: the RSA-2048 signature, which is also the program.
+    pub signature: String,
+    pub key_fingerprint: String,
     pub opt_level: u8,
     pub kludge_count: u32,
     pub built_with: String,
-    pub plan: String,
 }
 
 /// If the running executable carries a payload, return it.
@@ -81,11 +82,11 @@ mod tests {
         let stub = b"pretend this is a binary".to_vec();
         let p = Program {
             name: "x".into(),
-            source_sha256: "00".into(),
+            signature: "ab".repeat(256),
+            key_fingerprint: "00".into(),
             opt_level: 0,
             kludge_count: 4,
             built_with: "test".into(),
-            plan: "hello".into(),
         };
         let exe = assemble(&stub, &p).unwrap();
         assert_eq!(strip(exe), stub);

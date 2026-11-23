@@ -47,7 +47,15 @@ jobs:
           "$W" parsy-builder synergy.womm.md
           "./synergy$EXT" | tee out.txt
           grep -q "Works on my machine" out.txt
-          "./synergy$EXT" --womm-source | diff - synergy.womm
+          "./synergy$EXT" | diff - out.txt
+          SIG="$("./synergy$EXT" --womm-signature | tr -d '\r')"
+          test "${#SIG}" = "512"
+          test "$(sed -n '/signature:begin/,/signature:end/p' synergy.womm.md | grep -E '^[0-9a-f]{64}$' | tr -d '\n')" = "$SIG"
+          test "$("./synergy$EXT" --womm-disasm | wc -l | tr -d ' ')" = "256"
+          cp synergy.womm.md first.md
+          "$W" build synergy.kludged
+          cmp first.md synergy.womm.md
+          rm first.md
           "$W" augh
           test ! -e synergy.kludged
           test ! -e synergy.womm.md

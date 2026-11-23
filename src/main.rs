@@ -1,9 +1,11 @@
 mod cleanup;
 mod gag;
+mod keys;
 mod kludge;
 mod manifest;
 mod payload;
 mod runtime;
+mod vm;
 
 use std::path::PathBuf;
 use std::process::exit;
@@ -14,13 +16,14 @@ use clap::{CommandFactory, Parser, Subcommand};
 #[derive(Parser)]
 #[command(
     name = "womm",
-    version = "0.0.1 (works-on-my-machine)",
+    version = concat!(env!("CARGO_PKG_VERSION"), " (works-on-my-machine)"),
     about = "Enterprise-grade declarative executable synthesis.",
     long_about = "womm turns a free-form project plan (any UTF-8 text, saved as <name>.womm) \
 into a native executable through a rigorous three-stage toolchain:\n\n  \
 1. parse          .womm        -> .kludge intermediate objects\n  \
-2. build          .kludged/    -> .womm.md build manifest\n  \
-3. parsy-builder  .womm.md     -> native executable",
+2. build          .kludged/    -> SHA-512 -> RSA-2048 signature -> .womm.md manifest\n  \
+3. parsy-builder  .womm.md     -> 512 hex digits -> Kludge VM program -> native executable\n\n\
+Built executables accept --womm-disasm and --womm-signature.",
     after_long_help = "Optimisation levels (-O0..-O3) apply to the parser, not the compiler. \
 Higher levels produce more kludge objects.\n\nSee README.md for limitations.*",
     disable_help_flag = true,
