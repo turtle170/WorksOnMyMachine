@@ -1,0 +1,24 @@
+[package]
+name = "womm"
+version = "0.0.1"
+edition = "2021"
+description = "Enterprise-grade declarative executable synthesis."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/turtle170/WorksOnMyMachine"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+dirs = "5"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+toml = "0.8"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1

@@ -1,0 +1,6 @@
+/target
+# Local Claude Code settings (machine-specific)
+/.claude/
+*.kludged/
+*.kludge
+*.womm.md
