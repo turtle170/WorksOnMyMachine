@@ -4,3 +4,4 @@
 *.kludged/
 *.kludge
 *.womm.md
+.DS_Store
