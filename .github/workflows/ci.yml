@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --release -- -D warnings
+
+      - name: Unit tests
+        run: cargo test --release
+
+      - name: End-to-end pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          W="$PWD/target/release/womm"
+          mkdir e2e && cd e2e
+          cp ../examples/synergy.womm .
+          "$W" parse synergy.womm -O2
+          test "$(ls synergy.kludged | wc -l | tr -d ' ')" = "64"
+          "$W" build synergy.kludged
+          "$W" parsy-builder synergy.womm.md
+          ./synergy | tee out.txt
+          grep -q "Works on my machine" out.txt
+          ./synergy --womm-source | diff - synergy.womm
+          "$W" augh
+          test ! -e synergy.kludged
+          test ! -e synergy.womm.md
+          test -e synergy.womm
