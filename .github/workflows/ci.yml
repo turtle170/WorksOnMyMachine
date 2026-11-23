@@ -29,20 +29,25 @@ jobs:
       - name: Unit tests
         run: cargo test --release
 
+      - name: Build release binary
+        run: cargo build --release
+
       - name: End-to-end pipeline
         shell: bash
         run: |
           set -euo pipefail
-          W="$PWD/target/release/womm"
+          EXT=""
+          if [[ "$RUNNER_OS" == "Windows" ]]; then EXT=".exe"; fi
+          W="$PWD/target/release/womm$EXT"
           mkdir e2e && cd e2e
           cp ../examples/synergy.womm .
           "$W" parse synergy.womm -O2
           test "$(ls synergy.kludged | wc -l | tr -d ' ')" = "64"
           "$W" build synergy.kludged
           "$W" parsy-builder synergy.womm.md
-          ./synergy | tee out.txt
+          "./synergy$EXT" | tee out.txt
           grep -q "Works on my machine" out.txt
-          ./synergy --womm-source | diff - synergy.womm
+          "./synergy$EXT" --womm-source | diff - synergy.womm
           "$W" augh
           test ! -e synergy.kludged
           test ! -e synergy.womm.md
