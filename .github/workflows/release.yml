@@ -11,8 +11,28 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  packages:
+    name: Package store
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build packages.tar
+        run: |
+          cargo build --release
+          ./target/release/womm pack-store packages packages.tar
+          WOMM_FAST=1 ./target/release/womm why --release > release-notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: |
+            packages.tar
+            release-notes.md
+
   build:
     name: Build ${{ matrix.target }}
+    needs: packages
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -30,17 +50,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Package
+      - name: Portable archive
         shell: bash
         run: |
           set -euo pipefail
           name="womm-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir "$name"
-          cp README.md LICENSE "$name/"
+          cp README.md LICENSE packages.tar "$name/"
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             cp "target/${{ matrix.target }}/release/womm.exe" "$name/"
             7z a "$name.zip" "$name" > /dev/null
@@ -49,17 +72,54 @@ jobs:
             tar czf "$name.tar.gz" "$name"
           fi
 
+      - name: macOS installer (.pkg, installs to ~/Documents/Womm)
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/pkgroot"
+          mkdir -p "$root"
+          cp "target/${{ matrix.target }}/release/womm" README.md LICENSE packages.tar "$root/"
+          ./scripts/fetch-python.sh "${{ matrix.target }}" "$root"
+          version="${GITHUB_REF_NAME#v}"
+          pkgbuild --root "$root" --identifier com.turtle170.womm --version "$version" \
+            --install-location "Documents/Womm" component.pkg
+          productbuild --distribution installer/macos/distribution.xml --package-path . \
+            "womm-${GITHUB_REF_NAME}-${{ matrix.target }}.pkg"
+
+      - name: Windows installer (NSIS .exe, installs to %AppData%\Womm)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          stage="$PWD/stage"
+          mkdir -p "$stage"
+          cp target/${{ matrix.target }}/release/womm.exe README.md LICENSE packages.tar "$stage/"
+          ./scripts/fetch-python.sh "${{ matrix.target }}" "$stage"
+          if ! command -v makensis >/dev/null; then
+            choco install nsis -y --no-progress
+            export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          fi
+          makensis -DVERSION="${GITHUB_REF_NAME#v}" -DSRC="$(cygpath -w "$stage")" \
+            -DOUT="$(cygpath -w "$PWD/womm-${GITHUB_REF_NAME}-${{ matrix.target }}-setup.exe")" \
+            installer/windows/womm.nsi
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: |
             womm-*.tar.gz
             womm-*.zip
+            womm-*.pkg
+            womm-*-setup.exe
           if-no-files-found: error
 
   release:
     name: Publish release
-    needs: build
+    needs: [packages, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -70,7 +130,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.zip \
+          shopt -s nullglob
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*.tar.gz dist/*.zip dist/*.pkg dist/*-setup.exe dist/packages.tar \
             --repo "$GITHUB_REPOSITORY" \
             --title "womm $GITHUB_REF_NAME" \
-            --notes "Enterprise-grade declarative executable synthesis. Works on my machine."
+            --notes-file dist/release-notes.md

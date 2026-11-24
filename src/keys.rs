@@ -14,8 +14,32 @@ pub const KEY_BITS: usize = 2048;
 pub const SCHEME: &str = "RSASSA-PKCS1-v1_5 / RSA-2048 / SHA-512";
 
 fn key_path() -> Result<PathBuf> {
+    if let Some(h) = std::env::var_os("WOMM_HOME") {
+        return Ok(PathBuf::from(h).join("machine-key.pem"));
+    }
     let dir = dirs::config_dir().context("could not find a config directory for the machine key")?;
     Ok(dir.join("womm").join("machine-key.pem"))
+}
+
+/// The machine key if this machine already has one. Never generates.
+pub fn existing_key() -> Option<RsaPrivateKey> {
+    let pem = fs::read_to_string(key_path().ok()?).ok()?;
+    RsaPrivateKey::from_pkcs8_pem(&pem).ok()
+}
+
+/// Public key bytes (DER), used as a per-machine seed.
+pub fn public_der(key: &RsaPrivateKey) -> Vec<u8> {
+    key.to_public_key().to_public_key_der().map(|d| d.as_bytes().to_vec()).unwrap_or_default()
+}
+
+/// A hash of this machine's hostname. The name itself is never stored.
+pub fn host_hash() -> String {
+    let name = gethostname::gethostname().to_string_lossy().into_owned();
+    hex::encode(&Sha256::digest(name.as_bytes())[..8])
+}
+
+pub fn fingerprint(key: &RsaPrivateKey) -> String {
+    hex::encode(&Sha256::digest(public_der(key))[..8])
 }
 
 pub fn machine_key() -> Result<RsaPrivateKey> {

@@ -1,8 +1,9 @@
 //! The Kludge Virtual Machine.
 //!
-//! A signature is 512 hex digits = 256 bytes = 256 instructions. Each byte is
-//! `oooo aaaa`: the high nibble picks the opcode, the low nibble is its argument.
-//! Every possible signature is a valid program, and every program terminates.
+//! A program is the final hash: one instruction per byte, `oooo aaaa`, where the
+//! high nibble picks the opcode and the low nibble is its argument. Programs
+//! vary in length (NoNet decides). Every program is valid and every program
+//! terminates. Longer programs are allowed to say more.
 
 use std::io::Write;
 use std::thread::sleep;
@@ -10,8 +11,9 @@ use std::time::Duration;
 
 use anyhow::{bail, Result};
 
-pub const PROGRAM_LEN: usize = 256;
-pub const SIGNATURE_HEX_LEN: usize = PROGRAM_LEN * 2;
+/// Output and step budgets are granted per 256 instructions.
+pub const BUDGET_UNIT: usize = 256;
+pub const MAX_PROGRAM_LEN: usize = 4096;
 const MAX_STEPS: usize = 20_000;
 const MAX_LINES: usize = 120;
 const WRAP: usize = 64;
@@ -63,10 +65,20 @@ fn glyph(set: usize, i: usize) -> char {
     GLYPH_SETS[set % GLYPH_SETS.len()].chars().nth(i % 16).unwrap()
 }
 
-/// Strictly decode a 512-digit hex signature into 256 instructions.
-pub fn decode_signature(hex: &str) -> Result<Vec<u8>> {
-    if hex.len() != SIGNATURE_HEX_LEN {
-        bail!("expected exactly {SIGNATURE_HEX_LEN} hex digits, found {}", hex.len());
+/// The line budget for a program of this length.
+pub fn max_lines(len: usize) -> usize {
+    MAX_LINES * len.div_ceil(BUDGET_UNIT).max(1)
+}
+
+/// Strictly decode a hex program: an even number of hex digits, at least one
+/// instruction, at most MAX_PROGRAM_LEN.
+pub fn decode_program(hex: &str) -> Result<Vec<u8>> {
+    if hex.is_empty() || !hex.len().is_multiple_of(2) || hex.len() > MAX_PROGRAM_LEN * 2 {
+        bail!(
+            "expected an even number of hex digits between 2 and {}, found {}",
+            MAX_PROGRAM_LEN * 2,
+            hex.len()
+        );
     }
     if let Some((i, c)) = hex.char_indices().find(|(_, c)| !c.is_ascii_hexdigit()) {
         bail!("illegal character {c:?} at column {i}; signatures are hexadecimal");
@@ -121,6 +133,7 @@ pub fn disasm(code: &[u8]) -> String {
 
 struct Machine<'a> {
     out: &'a mut dyn Write,
+    max_lines: usize,
     color: bool,
     col: usize,
     lines: usize,
@@ -131,7 +144,7 @@ struct Machine<'a> {
 
 impl Machine<'_> {
     fn full(&self) -> bool {
-        self.lines >= MAX_LINES
+        self.lines >= self.max_lines
     }
     fn emit(&mut self, s: &str) {
         if self.full() {
@@ -161,11 +174,13 @@ impl Machine<'_> {
 }
 
 pub fn run(code: &[u8], out: &mut dyn Write, animate: bool, color: bool) {
-    let mut m = Machine { out, color, col: 0, lines: 0, set: 0, glyph: glyph(0, 0), reg: 0 };
+    let max_lines = max_lines(code.len());
+    let max_steps = MAX_STEPS * code.len().div_ceil(BUDGET_UNIT).max(1);
+    let mut m = Machine { out, max_lines, color, col: 0, lines: 0, set: 0, glyph: glyph(0, 0), reg: 0 };
     let mut loops: Vec<(usize, usize)> = Vec::new(); // (body start, iterations left)
     let (mut pc, mut steps) = (0usize, 0usize);
 
-    while pc < code.len() && steps < MAX_STEPS && !m.full() {
+    while pc < code.len() && steps < max_steps && !m.full() {
         steps += 1;
         let (op, a) = (code[pc] >> 4, (code[pc] & 0xF) as usize);
         let mut next = pc + 1;
@@ -265,17 +280,20 @@ mod tests {
 
     #[test]
     fn decode_is_strict() {
-        assert!(decode_signature(&"ab".repeat(256)).is_ok());
-        assert!(decode_signature(&"ab".repeat(255)).is_err());
-        assert!(decode_signature(&format!("zz{}", "ab".repeat(255))).is_err());
+        assert!(decode_program(&"ab".repeat(256)).is_ok());
+        assert!(decode_program(&"ab".repeat(1100)).is_ok());
+        assert!(decode_program("abc").is_err());
+        assert!(decode_program("").is_err());
+        assert!(decode_program(&format!("zz{}", "ab".repeat(255))).is_err());
     }
 
     #[test]
     fn every_program_terminates_deterministically() {
         // A cheap LCG gives a spread of programs, including loop-heavy ones.
         let mut x: u32 = 0x5eed;
-        for _ in 0..200 {
-            let code: Vec<u8> = (0..PROGRAM_LEN)
+        for n in 0..200 {
+            let len = [256, 1040, 1152, 3][n % 4];
+            let code: Vec<u8> = (0..len)
                 .map(|_| {
                     x = x.wrapping_mul(1_103_515_245).wrapping_add(12_345);
                     (x >> 16) as u8
@@ -285,10 +303,10 @@ mod tests {
             run(&code, &mut a, false, true);
             run(&code, &mut b, false, true);
             assert_eq!(a, b);
-            assert!(a.iter().filter(|&&b| b == b'\n').count() <= MAX_LINES);
+            assert!(a.iter().filter(|&&b| b == b'\n').count() <= max_lines(len));
             assert!(String::from_utf8(a).is_ok());
         }
-        let all_loops = vec![0x52u8; PROGRAM_LEN];
+        let all_loops = vec![0x52u8; 1152];
         run(&all_loops, &mut Vec::new(), false, false);
     }
 }

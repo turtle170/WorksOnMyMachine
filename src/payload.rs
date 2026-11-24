@@ -13,18 +13,28 @@ const FOOTER: usize = 16;
 #[derive(Serialize, Deserialize)]
 pub struct Program {
     pub name: String,
-    /// 512 hex digits: the RSA-2048 signature, which is also the program.
+    /// The final hash in hex (four RSA-2048 signatures plus NoNet's extra
+    /// hash). This is also the program.
     pub signature: String,
     pub key_fingerprint: String,
     pub opt_level: u8,
     pub kludge_count: u32,
     pub built_with: String,
+    /// First 8 bytes (hex) of SHA-256 of the build machine's hostname. Never the name itself.
+    #[serde(default)]
+    pub host_hash: String,
+    #[serde(default)]
+    pub arch: String,
 }
 
 /// If the running executable carries a payload, return it.
 pub fn read_self() -> Option<Program> {
-    let exe = std::env::current_exe().ok()?;
-    let mut f = File::open(exe).ok()?;
+    read_from(&std::env::current_exe().ok()?)
+}
+
+/// The payload of any womm-built executable on disk.
+pub fn read_from(path: &std::path::Path) -> Option<Program> {
+    let mut f = File::open(path).ok()?;
     let len = f.metadata().ok()?.len();
     if len < FOOTER as u64 {
         return None;
@@ -87,6 +97,8 @@ mod tests {
             opt_level: 0,
             kludge_count: 4,
             built_with: "test".into(),
+            host_hash: String::new(),
+            arch: String::new(),
         };
         let exe = assemble(&stub, &p).unwrap();
         assert_eq!(strip(exe), stub);

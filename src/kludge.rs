@@ -8,6 +8,10 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::gags;
+use crate::grammar::Ctx;
+use crate::nonet::Voice;
+
 pub const FORMAT: u32 = 1;
 const BASE_FRAGMENTS: u32 = 4;
 
@@ -49,7 +53,10 @@ pub fn kludged_dir_for(file: &Path, stem: &str) -> PathBuf {
         .join(format!("{stem}.kludged"))
 }
 
-pub fn parse(file: &Path, opt: u8) -> Result<()> {
+pub fn parse(file: &Path, opt: u8, quiet_warnings: bool) -> Result<()> {
+    if opt > 3 {
+        bail!("-O{opt} is reserved for the machine");
+    }
     let name = file
         .file_name()
         .and_then(|n| n.to_str())
@@ -63,18 +70,36 @@ pub fn parse(file: &Path, opt: u8) -> Result<()> {
     }
 
     let bytes = fs::read(file).with_context(|| format!("could not read {}", file.display()))?;
-    if std::str::from_utf8(&bytes).is_err() {
+    let Ok(text) = std::str::from_utf8(&bytes) else {
         bail!("{name} is not valid UTF-8; womm only accepts Unicode project plans");
-    }
+    };
 
     let source_sha256 = sha256_hex(&bytes);
+    let key = crate::keys::machine_key()?;
+    let mut voice = Voice::new(&gags::parse_seed(&crate::keys::public_der(&key), &source_sha256));
+    let ctx = Ctx::from_text(text);
+
     let dir = kludged_dir_for(file, stem);
     prepare_dir(&dir)?;
-
     let total = fragment_count(opt);
-    let chunk = (bytes.len() as u32).div_ceil(total).max(1) as usize;
 
     println!("   Parsing {name} (parser opt-level {opt})");
+    gags::opt_passes(&mut voice, &ctx, opt);
+    emit(&dir, &name, &bytes, total, opt)?;
+    println!("   Emitted {total} kludge object(s) into {}", dir.display());
+    println!("   Source integrity sha256:{source_sha256}");
+
+    let ws = gags::warnings(&mut voice, text, opt);
+    gags::print_warnings(&ws, None, quiet_warnings);
+    gags::o3_aftermath(total, opt);
+    println!("    Finished. Next: womm build {}", dir.display());
+    Ok(())
+}
+
+/// Split `bytes` into `total` kludge objects inside `dir`.
+pub fn emit(dir: &Path, source_name: &str, bytes: &[u8], total: u32, opt: u8) -> Result<()> {
+    let source_sha256 = sha256_hex(bytes);
+    let chunk = (bytes.len() as u32).div_ceil(total).max(1) as usize;
     for i in 0..total {
         let start = (i as usize * chunk).min(bytes.len());
         let end = ((i as usize + 1) * chunk).min(bytes.len());
@@ -85,7 +110,7 @@ pub fn parse(file: &Path, opt: u8) -> Result<()> {
                 index: i,
                 total,
                 opt_level: opt,
-                source_name: name.clone(),
+                source_name: source_name.to_string(),
                 source_sha256: source_sha256.clone(),
                 womm_version: env!("CARGO_PKG_VERSION").to_string(),
             },
@@ -102,15 +127,11 @@ pub fn parse(file: &Path, opt: u8) -> Result<()> {
         let file_name = format!("{i:04}-{}.kludge", &k.payload.checksum[..8]);
         fs::write(dir.join(file_name), body)?;
     }
-
-    println!("   Emitted {total} kludge object(s) into {}", dir.display());
-    println!("   Source integrity sha256:{source_sha256}");
-    println!("    Finished. Next: womm build {}", dir.display());
     Ok(())
 }
 
 /// Create the output dir, removing stale .kludge files from an earlier parse.
-fn prepare_dir(dir: &Path) -> Result<()> {
+pub fn prepare_dir(dir: &Path) -> Result<()> {
     if dir.exists() {
         for entry in fs::read_dir(dir)? {
             let path = entry?.path();

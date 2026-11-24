@@ -5,7 +5,9 @@
 use std::fs;
 use std::path::Path;
 
+use crate::hidden::phrase_key;
 use crate::manifest::MAGIC_PREFIX;
+use crate::state::{self, State};
 
 #[derive(Default)]
 struct Report {
@@ -14,8 +16,54 @@ struct Report {
     manifests: usize,
 }
 
-pub fn run_from_cwd() -> i32 {
+fn ago(secs: u64) -> String {
+    match secs {
+        0..=89 => "just now".into(),
+        90..=5399 => format!("{} minutes ago", secs / 60),
+        5400..=129_599 => format!("{} hours ago", secs / 3600),
+        _ => format!("{} days ago", secs / 86_400),
+    }
+}
+
+/// The cleanup commands remember you.
+fn remember(phrase: &str) {
+    let mut st = State::load();
+    let last = st.cleanup.last;
+    st.cleanup.total += 1;
+    st.cleanup.last = state::now();
+    *st.cleanup.by_phrase.entry(phrase_key(phrase)).or_insert(0) += 1;
+    st.day(state::today()).breakdowns += 1;
+    let total = st.cleanup.total;
+    let favourite = st.cleanup.by_phrase.iter().max_by_key(|(_, n)| **n).map(|(p, n)| (p.clone(), *n));
+    st.save();
+
+    let tier = match total {
+        100.. if total.is_multiple_of(100) => Some("CERTIFICATE OF PERSEVERANCE: awarded for 100 breakdowns. frame it."),
+        50.. => Some("at this point i am the one who wants to stop."),
+        25.. => Some("that is a personal best."),
+        10.. => Some("have you considered touching grass. it compiles on every machine."),
+        5.. => Some("this is becoming a pattern."),
+        3.. => Some("third time. no judgement. some judgement."),
+        _ => None,
+    };
+    if let Some(t) = tier {
+        println!("(breakdown #{total}) {t}");
+    }
+    if total >= 3 {
+        if let Some((p, n)) = favourite {
+            if n >= 2 {
+                println!("you mostly say \"{p}\" when stressed.");
+            }
+        }
+    }
+    if last > 0 {
+        println!("last breakdown: {}.", ago(state::now().saturating_sub(last)));
+    }
+}
+
+pub fn run_from_cwd(phrase: &str) -> i32 {
     println!("It's okay. Cleaning up.");
+    remember(phrase);
     let mut r = Report::default();
     if let Err(e) = walk(Path::new("."), &mut r) {
         eprintln!("womm: cleanup stopped early: {e}");

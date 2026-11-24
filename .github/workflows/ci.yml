@@ -39,23 +39,68 @@ jobs:
           EXT=""
           if [[ "$RUNNER_OS" == "Windows" ]]; then EXT=".exe"; fi
           W="$PWD/target/release/womm$EXT"
+          PY=python3; if [[ "$RUNNER_OS" == "Windows" ]] || ! command -v python3 >/dev/null; then PY=python; fi
           mkdir e2e && cd e2e
+          export WOMM_HOME="$PWD/home" WOMM_FAST=1
           cp ../examples/synergy.womm .
-          "$W" parse synergy.womm -O2
+
+          # parse -> build -> parsy-builder
+          "$W" parse synergy.womm -O2 | tee parse.txt
+          grep -q "warning\[W" parse.txt
           test "$(ls synergy.kludged | wc -l | tr -d ' ')" = "64"
-          "$W" build synergy.kludged
+          "$W" build synergy.kludged | tee build.txt
+          grep -q "Verified\|garbage collected" build.txt
+          test ! -e synergy.kludged/chain.kludged
+          test ! -e synergy.kludged/nonet.kludged
           "$W" parsy-builder synergy.womm.md
+
+          # the executable
           "./synergy$EXT" | tee out.txt
-          grep -q "Works on my machine" out.txt
+          grep -qi "program complete" out.txt
+          grep -q "verdict:" out.txt
           "./synergy$EXT" | diff - out.txt
           SIG="$("./synergy$EXT" --womm-signature | tr -d '\r')"
-          test "${#SIG}" = "512"
-          test "$(sed -n '/signature:begin/,/signature:end/p' synergy.womm.md | grep -E '^[0-9a-f]{64}$' | tr -d '\n')" = "$SIG"
-          test "$("./synergy$EXT" --womm-disasm | wc -l | tr -d ' ')" = "256"
+          HEX="$(sed -n '/chain:begin/,/chain:end/p;/extra:begin/,/extra:end/p' synergy.womm.md | grep -E '^[0-9a-f]+$' | tr -d '\n')"
+          test "$HEX" = "$SIG"
+          test "$("./synergy$EXT" --womm-disasm | wc -l | tr -d ' ')" = "$(( ${#SIG} / 2 ))"
+          "./synergy$EXT" --womm-mood
+
+          # determinism
           cp synergy.womm.md first.md
-          "$W" build synergy.kludged
+          "$W" build -W no synergy.kludged
           cmp first.md synergy.womm.md
           rm first.md
+
+          # visualise: the Python must reproduce NoNet's extra hash exactly
+          "$W" visualise synergy.womm.md
+          EXTRA="$(sed -n '/extra:begin/,/extra:end/p' synergy.womm.md | grep -E '^[0-9a-f]+$' | tr -d '\n')"
+          test "$("$PY" synergy.nonet.py | tr -d '\r')" = "$EXTRA"
+
+          # packages: no list command, decline means no install
+          "$W" ask will this work | tee ask.txt
+          grep -qx "No." ask.txt
+          "$W" pack-store ../packages "$WOMM_HOME/packages.tar"
+          set +e; echo n | "$W" ship nonet > ship.txt; code=$?; set -e
+          test "$code" = "1"
+          grep -q "No access, though it worked on my machine." ship.txt
+          test ! -e "$WOMM_HOME/womm/nonet"
+          echo y | "$W" ship nonet
+          test -e "$WOMM_HOME/womm/nonet/manifest.toml"
+          "$W" ask will this work on my machine | grep >/dev/null "confidence"
+          "$W" train --epochs 2 | grep >/dev/null "no-rate"
+          "$W" visualise synergy.womm.md --run | grep >/dev/null "NoNet is real"
+
+          # the rest of the hidden layer
+          printf 'Make it pop\nSynergise the backlog\n' > pop.womm
+          "$W" parse pop.womm && "$W" build pop.kludged && "$W" parsy-builder pop.womm.md
+          "$W" duel "synergy$EXT" "pop$EXT" | grep >/dev/null "works on MY machine\|draw"
+          "$W" works-on-my-machine --prove > cert.txt
+          "$W" works-on-my-machine --verify cert.txt | grep >/dev/null VALID
+          "$W" blame synergy.womm | grep >/dev/null "the machine is innocent"
+          "$W" standup
+          "$W" why
+
+          # cleanup
           "$W" augh
           test ! -e synergy.kludged
           test ! -e synergy.womm.md

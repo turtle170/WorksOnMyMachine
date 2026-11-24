@@ -1,6 +1,6 @@
 [package]
 name = "womm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Enterprise-grade declarative executable synthesis."
 license = "MIT"
@@ -12,12 +12,18 @@ anyhow = "1"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 dirs = "5"
+gethostname = "1"
 hex = "0.4"
 rand = "0.8"
 rsa = { version = "0.9", features = ["sha2"] }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
+tar = "0.4"
 toml = "0.8"
+zstd = "0.13"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [profile.release]
 opt-level = "z"

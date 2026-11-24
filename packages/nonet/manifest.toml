@@ -1,0 +1,5 @@
+name = "nonet"
+version = "0.2.0"
+command = "nonet"
+runs = "ask"
+description = "NoNet v0: an 833-parameter neural network that has been trained to say no."
