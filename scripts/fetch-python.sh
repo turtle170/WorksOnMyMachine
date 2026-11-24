@@ -13,7 +13,11 @@ if [[ -z "$asset" || "$asset" == "null" ]]; then
 fi
 echo "bundling $asset"
 tag="$(gh api repos/astral-sh/python-build-standalone/releases/latest --jq .tag_name)"
-gh release download "$tag" --repo astral-sh/python-build-standalone --pattern "$asset" --dir "$RUNNER_TEMP"
+# A POSIX temp dir: GNU tar on Windows reads "D:\..." as a remote host.
+tmp="$(mktemp -d)"
+gh release download "$tag" --repo astral-sh/python-build-standalone --pattern "$asset" --dir "$tmp"
 mkdir -p "$dest"
-tar xzf "$RUNNER_TEMP/$asset" -C "$dest"
+(cd "$tmp" && tar xzf "$asset")
+mv "$tmp/python" "$dest/python"
+rm -rf "$tmp"
 test -d "$dest/python"
