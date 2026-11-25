@@ -1,5 +1,7 @@
 # womm
 
+![womm parsing a project plan, building it through a hash chain and a neural network, garbage-collecting, linking, and running the result](docs/demo/hero.gif)
+
 **Enterprise-grade declarative executable synthesis. Now neurally assisted.**
 
 womm compiles project plans into native executables. Write your plan in any format your organisation already uses: Markdown, plain text, or any other UTF-8 content. womm then runs it through a rigorous, fully verified, AI-powered toolchain.[^1]
@@ -137,6 +139,10 @@ The build is where the engineering happens:
 7. Everything is written to `synergy.womm.md`.
 8. The **garbage collector** runs.
 
+![womm build: a progress bar that goes backwards, then a garbage collector with a trash can](docs/demo/build.gif)
+
+<sub>Real time, lightly compressed. The garbage collector takes its time on a real terminal; set `WOMM_FAST=1` if you have somewhere to be.</sub>
+
 The build re-analyses your plan with the signature and warns again. Warnings that agree with the parser are marked `(still)`.
 
 Your machine key is generated on first use and kept in your config directory. The same plan built on a different machine produces a different program.[^5]
@@ -162,22 +168,9 @@ Each byte of the final hash is one instruction for the **Kludge Virtual Machine*
 
 ### 5. Run
 
-```
-$ ./synergy
-synergy -- built with womm 0.2.0 from 64 kludge object(s) at -O2
-machine key 2fbd6ec49c5e0000, 1073 instructions, mood: Smug
+![A womm-built executable printing glyph art and excuses, then reviewing its own code](docs/demo/run.gif)
 
-▒▪▪▪▪▪▪▪▪▪▀▒▪▌◆◆◆◆◆◆◆◆ ping ▌ alignment  roadmap
-  // probably your PATH
-
-Program complete. Works on MY machine.
-
-── review ────────────────────────────────────────
-reviewer: self (the best reviewer available) (conflict of interest: yes)
-  0x0067  blocking: 6 stray END(s); who are these ENDs for; consider a feature flag
-  0x015f  question: HALT here; 721 instruction(s) after it never run; please add a test (we both know you won't)
-verdict: REQUEST CHANGES (will merge anyway)
-```
+<sub>Your program will look different. It was built on a different machine. That's the point.</sub>
 
 Every executable has a **mood**, chosen by its first instruction: Anxious, Corporate, Burnt-out, Smug, Haunted, Intern, Philosophical or Retired. When it runs on a machine other than the one it was built on, it notices.
 
@@ -223,6 +216,8 @@ womm visualises the manifest:
 👁
 ```
 
+![womm visualise prints an eye, then writes Python that reproduces NoNet's output exactly](docs/demo/visualise.gif)
+
 It also translates the StableHLO graph into `synergy.nonet.py`, a readable, dependency-free Python program. Running that file reproduces NoNet's extra hash exactly, bit for bit. This is the most useful thing womm does.
 
 ### Blame
@@ -233,6 +228,8 @@ womm blame synergy.womm
 
 Shows who wrote each line of a plan.
 
+![womm blame attributing every line to you](docs/demo/blame.gif)
+
 ### Packages
 
 womm ships with a package store. Packages are installed with:
@@ -242,6 +239,8 @@ womm ship <name>
 ```
 
 The package store is in the folder you installed womm to.[^8] Installing to PAHTH is recommended. It gives extra functionality and accessibility.
+
+![womm ship asking about PAHTH, and what happens when you say no](docs/demo/ship.gif)
 
 ### Getting help
 
