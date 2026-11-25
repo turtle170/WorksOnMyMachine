@@ -54,5 +54,5 @@ pub fn visualise(path: &Path, run: bool) -> Result<i32> {
         println!("   does not match the manifest. it worked on my machine.");
         return Ok(1);
     }
-    anyhow::bail!("no Python found (the installers bundle one; the portable zips do not)")
+    anyhow::bail!("no Python found (the Windows installer bundles one; elsewhere, put python3 on your PATH)")
 }

@@ -22,6 +22,9 @@ tar = "0.4"
 toml = "0.8"
 zstd = "0.13"
 
+[build-dependencies]
+winresource = "0.1"
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 

@@ -1,0 +1,17 @@
+womm will make these changes to your system. All of them are undone by
+uninstalling womm (Settings > Apps > womm, or %AppData%\Womm\uninstall.exe).
+
+1. Copy womm, its package store and a bundled Python into:
+       %AppData%\Womm
+
+2. Add these two folders to YOUR user PATH (not the system PATH):
+       %AppData%\Womm
+       %AppData%\Womm\bin
+
+3. Register womm under "Installed apps" so you can remove it.
+
+When you use womm, it also creates:
+   - a machine key in %AppData%\womm\machine-key.pem (the first time you build)
+   - a small state file in %LocalAppData%\womm\state.toml (it remembers things)
+
+womm never connects to the network. It doesn't need to. It works on your machine.

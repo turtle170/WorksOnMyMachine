@@ -18,21 +18,69 @@ womm compiles project plans into native executables. Write your plan in any form
 
 ## Installation
 
-Each [release](https://github.com/turtle170/WorksOnMyMachine/releases) provides:
+womm runs on macOS, Windows and Linux. Pick your platform below. All roads lead to the same place: a program that works on your machine.[^9]
 
-| Platform | Installer | Installs to |
-|---|---|---|
-| macOS | `womm-<version>-<arch>.pkg` | `~/Documents/Womm` |
-| Windows | `womm-<version>-x86_64-pc-windows-msvc-setup.exe` | `%AppData%\Womm` |
-| Any | `.tar.gz` / `.zip` portable archive | wherever you put it |
-
-The installers include Python.[^7] The installers are not code-signed, so macOS and Windows will warn you about them. They are correct to.
-
-From source:
+### macOS (Homebrew)
 
 ```bash
-cargo install --path .
+brew tap turtle170/womm
+brew trust turtle170/womm
+brew install womm
 ```
+
+Homebrew downloads the source and compiles womm on your Mac, so there is no unsigned download for Gatekeeper to quarantine. It takes a minute or two; this is a good time to stretch.
+
+`brew trust` is Homebrew 7's way of asking whether you trust a third-party tap. It's a fair question. Older versions of Homebrew skip that line and trust you implicitly.
+
+Check that it worked:
+
+```bash
+womm --version
+```
+
+### Windows
+
+Download `womm-<version>-x86_64-pc-windows-msvc-setup.exe` from the [latest release](https://github.com/turtle170/WorksOnMyMachine/releases/latest) and run it.
+
+- It installs for your user only, into `%AppData%\Womm`. No administrator rights are needed, or wanted.
+- Before changing anything, it shows you a list of every change it will make, including adding `%AppData%\Womm` and `%AppData%\Womm\bin` to your user `PATH`.
+- It bundles its own Python, for `womm visualise --run`.[^7] Your existing Python is not consulted, and will not be offended.
+- Open a **new** terminal afterwards, so it can see the new `PATH`. Old terminals keep their old opinions.
+
+Prefer not to install things? Take the portable `womm-<version>-x86_64-pc-windows-msvc.zip` instead, unzip it anywhere, and run `womm.exe` from that folder.
+
+Windows builds are signed through SignPath Foundation; see the [code signing policy](#code-signing-policy).[^10]
+
+### Linux
+
+Download `womm-<version>-x86_64-unknown-linux-gnu.tar.gz` from the [latest release](https://github.com/turtle170/WorksOnMyMachine/releases/latest), then:
+
+```bash
+tar xzf womm-*-x86_64-unknown-linux-gnu.tar.gz
+cd womm-*-x86_64-unknown-linux-gnu
+./womm --version
+```
+
+Keep `packages.tar` next to `womm`. They are close.
+
+### From source (anywhere with Rust)
+
+```bash
+cargo install --git https://github.com/turtle170/WorksOnMyMachine
+```
+
+This builds womm on your machine, which guarantees it works on your machine, at least once.
+
+### Uninstalling
+
+| Installed with | Remove with |
+|---|---|
+| Homebrew | `brew uninstall womm`, then `brew untap turtle170/womm` |
+| Windows installer | **Settings → Apps → womm → Uninstall**, or run `%AppData%\Womm\uninstall.exe`. This also removes the `PATH` entries. |
+| Portable archive | Delete the folder. |
+| Cargo | `cargo uninstall womm` |
+
+womm also leaves two small files behind on purpose, in case you come back: a machine key (`womm/machine-key.pem` in your config folder) and a state file (`womm/state.toml` in your cache folder). Delete the `womm` folder in each to forget everything. womm will not take it personally.[^11]
 
 ## Usage
 
@@ -218,8 +266,26 @@ Help is available.[^4]
 [^4]: Eventually.
 [^5]: It works on my machine.
 [^6]: 288 + 528 + 17. 3.33 KB as float32, or 833 bytes if you are generous with quantisation. Version 0.1.0 had none, and was codenamed "Works On Tuesday". This is 0.2.0, "NoNet v0".
-[^7]: The newest standalone CPython at release time, for `womm visualise --run`. The portable archives do not include Python. `visualise` still writes the file.
+[^7]: The newest standalone CPython at release time. Homebrew, Linux and the portable archives don't bundle Python; `womm visualise --run` uses `python3` from your `PATH` instead, and `visualise` always writes the file.
 [^8]: There is no command that lists the packages. Look inside `packages.tar`.
+[^9]: Results may vary by machine. That is the product.
+[^10]: Releases before SignPath Foundation approves the project are unsigned, and SmartScreen will say so. SmartScreen is not wrong.
+[^11]: It will take it personally.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+
+- Committers and reviewers: [turtle170](https://github.com/turtle170)
+- Approvers: [turtle170](https://github.com/turtle170)
+
+Only release builds produced by this repository's GitHub Actions workflow, from a tagged commit, are submitted for signing. Each release is approved by hand.
+
+## Privacy policy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+womm itself never uses the network. The Windows installer is built with a bundled copy of [Python](https://www.python.org/) from [python-build-standalone](https://github.com/astral-sh/python-build-standalone), which also does not phone home unless you write a program that does.
 
 ## License
 

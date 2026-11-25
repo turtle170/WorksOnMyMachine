@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -34,6 +35,10 @@ jobs:
     name: Build ${{ matrix.target }}
     needs: packages
     runs-on: ${{ matrix.os }}
+    env:
+      # Windows binaries are signed by SignPath Foundation once the project's
+      # SignPath settings exist. Until then, releases are built unsigned.
+      SIGNPATH: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -57,6 +62,32 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
+      # ---- SignPath: sign womm.exe before it goes anywhere ----
+      - name: Upload unsigned womm.exe
+        if: env.SIGNPATH == 'true'
+        id: unsigned-exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-womm-exe
+          path: target/${{ matrix.target }}/release/womm.exe
+      - name: Sign womm.exe (SignPath Foundation)
+        if: env.SIGNPATH == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'womm' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: womm-exe
+          github-artifact-id: ${{ steps.unsigned-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: signed-exe
+      - name: Use the signed womm.exe
+        if: env.SIGNPATH == 'true'
+        shell: bash
+        run: cp signed-exe/womm.exe "target/${{ matrix.target }}/release/womm.exe"
+
       - name: Portable archive
         shell: bash
         run: |
@@ -71,22 +102,6 @@ jobs:
             cp "target/${{ matrix.target }}/release/womm" "$name/"
             tar czf "$name.tar.gz" "$name"
           fi
-
-      - name: macOS installer (.pkg, installs to ~/Documents/Womm)
-        if: runner.os == 'macOS'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          root="$RUNNER_TEMP/pkgroot"
-          mkdir -p "$root"
-          cp "target/${{ matrix.target }}/release/womm" README.md LICENSE packages.tar "$root/"
-          ./scripts/fetch-python.sh "${{ matrix.target }}" "$root"
-          version="${GITHUB_REF_NAME#v}"
-          pkgbuild --root "$root" --identifier com.turtle170.womm --version "$version" \
-            --install-location "Documents/Womm" component.pkg
-          productbuild --distribution installer/macos/distribution.xml --package-path . \
-            "womm-${GITHUB_REF_NAME}-${{ matrix.target }}.pkg"
 
       - name: Windows installer (NSIS .exe, installs to %AppData%\Womm)
         if: runner.os == 'Windows'
@@ -107,13 +122,38 @@ jobs:
             -DOUT="$(cygpath -w "$PWD/womm-${GITHUB_REF_NAME}-${{ matrix.target }}-setup.exe")" \
             installer/windows/womm.nsi
 
+      # ---- SignPath: sign the installer too ----
+      - name: Upload unsigned installer
+        if: env.SIGNPATH == 'true'
+        id: unsigned-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-womm-setup
+          path: womm-*-setup.exe
+      - name: Sign the installer (SignPath Foundation)
+        if: env.SIGNPATH == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'womm' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: womm-setup
+          github-artifact-id: ${{ steps.unsigned-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: signed-setup
+      - name: Use the signed installer
+        if: env.SIGNPATH == 'true'
+        shell: bash
+        run: cp signed-setup/*-setup.exe .
+
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}
+          name: release-${{ matrix.target }}
           path: |
             womm-*.tar.gz
             womm-*.zip
-            womm-*.pkg
             womm-*-setup.exe
           if-no-files-found: error
 
@@ -124,15 +164,20 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: release-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
           gh release create "$GITHUB_REF_NAME" \
-            dist/*.tar.gz dist/*.zip dist/*.pkg dist/*-setup.exe dist/packages.tar \
+            dist/*.tar.gz dist/*.zip dist/*-setup.exe dist/packages.tar \
             --repo "$GITHUB_REPOSITORY" \
             --title "womm $GITHUB_REF_NAME" \
             --notes-file dist/release-notes.md
