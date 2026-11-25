@@ -105,3 +105,19 @@ jobs:
           test ! -e synergy.kludged
           test ! -e synergy.womm.md
           test -e synergy.womm
+
+      - name: Windows installer compiles
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p stage
+          cp target/release/womm.exe README.md LICENSE stage/
+          if ! command -v makensis >/dev/null; then
+            choco install nsis -y --no-progress
+            export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          fi
+          makensis -DVERSION=0.0.0 -DSRC="$(cygpath -w "$PWD/stage")" \
+            -DOUT="$(cygpath -w "$PWD/womm-ci-setup.exe")" installer/windows/womm.nsi
+          test -s womm-ci-setup.exe
+          powershell -NoProfile -Command "(Get-Item target/release/womm.exe).VersionInfo | Format-List ProductName,ProductVersion,FileDescription"
