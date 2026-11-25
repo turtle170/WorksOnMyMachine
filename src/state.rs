@@ -60,10 +60,15 @@ pub struct Day {
     pub epochs: u32,
 }
 
-/// Where womm keeps its things. `$WOMM_HOME` overrides everything (CI, tests).
+/// `$WOMM_HOME`, if set to something non-empty. It overrides everything (CI, tests).
+pub fn override_dir() -> Option<PathBuf> {
+    std::env::var_os("WOMM_HOME").filter(|h| !h.is_empty()).map(PathBuf::from)
+}
+
+/// Where womm keeps its things.
 pub fn home() -> Option<PathBuf> {
-    if let Some(h) = std::env::var_os("WOMM_HOME") {
-        return Some(PathBuf::from(h));
+    if let Some(h) = override_dir() {
+        return Some(h);
     }
     dirs::cache_dir().map(|d| d.join("womm"))
 }

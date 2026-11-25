@@ -14,8 +14,8 @@ pub const KEY_BITS: usize = 2048;
 pub const SCHEME: &str = "RSASSA-PKCS1-v1_5 / RSA-2048 / SHA-512";
 
 fn key_path() -> Result<PathBuf> {
-    if let Some(h) = std::env::var_os("WOMM_HOME") {
-        return Ok(PathBuf::from(h).join("machine-key.pem"));
+    if let Some(h) = crate::state::override_dir() {
+        return Ok(h.join("machine-key.pem"));
     }
     let dir = dirs::config_dir().context("could not find a config directory for the machine key")?;
     Ok(dir.join("womm").join("machine-key.pem"))

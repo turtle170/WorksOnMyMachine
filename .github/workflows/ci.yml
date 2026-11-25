@@ -83,12 +83,19 @@ jobs:
           set +e; echo n | "$W" ship nonet > ship.txt; code=$?; set -e
           test "$code" = "1"
           grep -q "No access, though it worked on my machine." ship.txt
-          test ! -e "$WOMM_HOME/womm/nonet"
+          test ! -e "$WOMM_HOME/womm-packages/nonet"
           echo y | "$W" ship nonet
-          test -e "$WOMM_HOME/womm/nonet/manifest.toml"
+          test -e "$WOMM_HOME/womm-packages/nonet/manifest.toml"
           "$W" ask will this work on my machine | grep >/dev/null "confidence"
           "$W" train --epochs 2 | grep >/dev/null "no-rate"
           "$W" visualise synergy.womm.md --run | grep >/dev/null "NoNet is real"
+
+          # portable layout: the store sits next to the binary (no WOMM_HOME store)
+          mkdir portable
+          cp "$W" "portable/womm$EXT"
+          cp "$WOMM_HOME/packages.tar" portable/
+          echo y | env -u WOMM_HOME "./portable/womm$EXT" ship nonet
+          test -e portable/womm-packages/nonet/manifest.toml
 
           # the rest of the hidden layer
           printf 'Make it pop\nSynergise the backlog\n' > pop.womm

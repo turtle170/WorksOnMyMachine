@@ -3,7 +3,7 @@
 //! Packages are pre-stored in `packages.tar` (one `<name>.tar.zst` each) next
 //! to the womm executable. There is deliberately no command that lists them:
 //! find the folder, look inside, type the name. Installing means unpacking the
-//! package into `womm/<name>/` and re-tarring the store. Declining PAHTH means
+//! package into `womm-packages/<name>/` and re-tarring the store. Declining PAHTH means
 //! it was never installed at all.
 
 use std::fs;
@@ -14,6 +14,9 @@ use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 pub const STORE: &str = "packages.tar";
+/// Installed packages live here, next to the store. (Not `womm/`: on macOS and
+/// Linux that name is already taken by the womm binary itself.)
+pub const INSTALLED: &str = "womm-packages";
 
 #[derive(Deserialize)]
 pub struct PackageManifest {
@@ -26,8 +29,8 @@ pub struct PackageManifest {
 
 /// Where the packages live: next to the womm executable (or `$WOMM_HOME`).
 pub fn store_dir() -> PathBuf {
-    if let Some(h) = std::env::var_os("WOMM_HOME") {
-        return PathBuf::from(h);
+    if let Some(h) = crate::state::override_dir() {
+        return h;
     }
     std::env::current_exe()
         .ok()
@@ -37,7 +40,7 @@ pub fn store_dir() -> PathBuf {
 }
 
 pub fn installed(name: &str) -> bool {
-    store_dir().join("womm").join(name).join("manifest.toml").exists()
+    store_dir().join(INSTALLED).join(name).join("manifest.toml").exists()
 }
 
 fn read_store(path: &Path) -> Result<Vec<(String, Vec<u8>)>> {
@@ -83,8 +86,8 @@ fn ask_pahth() -> bool {
 }
 
 fn bin_dir() -> PathBuf {
-    if let Some(h) = std::env::var_os("WOMM_HOME") {
-        return PathBuf::from(h).join("bin");
+    if let Some(h) = crate::state::override_dir() {
+        return h.join("bin");
     }
     if cfg!(windows) {
         store_dir().join("bin")
@@ -125,7 +128,7 @@ pub fn ship(name: &str) -> Result<i32> {
     };
 
     println!("   Unpacking {wanted} from {}", store.display());
-    let target = dir.join("womm");
+    let target = dir.join(INSTALLED);
     fs::create_dir_all(&target)?;
     let tar_bytes = zstd::decode_all(packed.as_slice()).context("package is not valid zstd")?;
     tar::Archive::new(tar_bytes.as_slice())
