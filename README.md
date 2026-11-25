@@ -272,12 +272,13 @@ Help is available.[^4]
 [^10]: Releases before SignPath Foundation approves the project are unsigned, and SmartScreen will say so. SmartScreen is not wrong.
 [^11]: It will take it personally.
 
-## Code signing policy
+## Code Signing Policy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
-- Committers and reviewers: [turtle170](https://github.com/turtle170)
-- Approvers: [turtle170](https://github.com/turtle170)
+* **Committers and reviewers:** [turtle170](https://github.com/turtle170)
+* **Approvers:** [turtle170](https://github.com/turtle170)
+* **Privacy policy:** This program does not transfer any information to other networked systems unless specifically requested by the user. See [Privacy policy](#privacy-policy).
 
 Only release builds produced by this repository's GitHub Actions workflow, from a tagged commit, are submitted for signing. Each release is approved by hand.
 
